@@ -65,6 +65,8 @@ export function VoteControls({
     >
       <button
         type="button"
+        aria-label="Upvote"
+        aria-pressed={vote === 1}
         disabled={pending}
         onClick={() => mutateVote(1)}
         className={`rounded-full p-1.5 transition ${
@@ -76,6 +78,8 @@ export function VoteControls({
       <span className="min-w-9 text-center text-sm font-semibold text-[var(--ink)]">{score}</span>
       <button
         type="button"
+        aria-label="Downvote"
+        aria-pressed={vote === -1}
         disabled={pending}
         onClick={() => mutateVote(-1)}
         className={`rounded-full p-1.5 transition ${

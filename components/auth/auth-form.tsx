@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { TurnstileWidget } from "@/components/auth/turnstile-widget";
 import type { CommunitySummary } from "@/lib/types";
 
 interface AuthFormProps {
@@ -17,7 +17,10 @@ export function AuthForm({ mode, communities }: AuthFormProps) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [selectedCommunity, setSelectedCommunity] = useState(communities[0]?.slug ?? "");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaResetCounter, setCaptchaResetCounter] = useState(0);
   const submitLabel = mode === "sign-in" ? "Sign in" : "Create account";
+  const captchaSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
   const header = useMemo(() => {
     return mode === "sign-in"
@@ -53,48 +56,55 @@ export function AuthForm({ mode, communities }: AuthFormProps) {
 
           startTransition(async () => {
             try {
-              const supabase = getSupabaseBrowserClient();
+              setMessage(null);
 
-              if (mode === "sign-in") {
-                const { error } = await supabase.auth.signInWithPassword({
-                  email,
-                  password,
-                });
-
-                if (error) {
-                  throw error;
-                }
-
-                router.push("/");
-                router.refresh();
-                return;
-              }
-
-              const { error, data } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                  emailRedirectTo: `${window.location.origin}/auth/callback`,
-                  data: {
+              const response = await fetch(
+                mode === "sign-in" ? "/api/auth/sign-in" : "/api/auth/sign-up",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    email,
+                    password,
                     username,
-                    home_community_slug: communitySlug,
-                  },
+                    communitySlug,
+                    captchaToken,
+                  }),
                 },
-              });
+              );
 
-              if (error) {
-                throw error;
-              }
+              const payload = (await response.json().catch(() => null)) as
+                | {
+                    error?: string;
+                    redirectTo?: string | null;
+                    requiresEmailVerification?: boolean;
+                    message?: string | null;
+                  }
+                | null;
 
-              if (data.session) {
-                router.push(`/c/${communitySlug}`);
-                router.refresh();
+              if (!response.ok) {
+                setMessage(payload?.error ?? "Unable to continue.");
+                if (captchaSiteKey) {
+                  setCaptchaResetCounter((value) => value + 1);
+                }
                 return;
               }
 
-              setMessage("Check your email to verify your account, then return here to sign in.");
-            } catch (error) {
-              setMessage(error instanceof Error ? error.message : "Unable to continue.");
+              if (payload?.requiresEmailVerification) {
+                setMessage(payload.message ?? "Check your email to verify your account.");
+                if (captchaSiteKey) {
+                  setCaptchaResetCounter((value) => value + 1);
+                }
+                return;
+              }
+
+              router.push(payload?.redirectTo ?? "/");
+              router.refresh();
+            } catch {
+              setMessage("Unable to continue.");
+              if (captchaSiteKey) {
+                setCaptchaResetCounter((value) => value + 1);
+              }
             }
           });
         }}
@@ -161,9 +171,22 @@ export function AuthForm({ mode, communities }: AuthFormProps) {
           </div>
         ) : null}
 
+        {captchaSiteKey ? (
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-[0.24em] text-[var(--muted)]">
+              Anti-bot check
+            </p>
+            <TurnstileWidget
+              siteKey={captchaSiteKey}
+              resetSignal={captchaResetCounter}
+              onTokenChange={setCaptchaToken}
+            />
+          </div>
+        ) : null}
+
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || Boolean(captchaSiteKey && !captchaToken)}
           className="w-full rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-70"
         >
           {pending ? "Working..." : submitLabel}

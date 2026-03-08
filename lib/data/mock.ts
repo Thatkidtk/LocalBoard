@@ -431,6 +431,7 @@ export function getMockSettingsData(): SettingsPageData {
     user: {
       id: authors[1].id,
       email: "moderator@localboard.dev",
+      isEmailVerified: true,
       username: authors[1].username,
       avatarUrl: null,
       karma: authors[1].karma,

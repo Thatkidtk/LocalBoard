@@ -51,3 +51,24 @@ export function getAdminAllowlist() {
 export function getCronSecret() {
   return process.env.CRON_SECRET ?? null;
 }
+
+export function getRateLimitSalt() {
+  return (
+    process.env.RATE_LIMIT_SALT ??
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.CRON_SECRET ??
+    "localboard-dev-rate-limit-salt"
+  );
+}
+
+export function getTurnstileSiteKey() {
+  return process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? null;
+}
+
+export function getTurnstileSecretKey() {
+  return process.env.TURNSTILE_SECRET_KEY ?? null;
+}
+
+export function hasCaptchaProtection() {
+  return Boolean(getTurnstileSiteKey() && getTurnstileSecretKey());
+}

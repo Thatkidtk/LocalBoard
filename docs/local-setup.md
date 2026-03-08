@@ -19,7 +19,13 @@ Fill in:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ADMIN_EMAIL_ALLOWLIST`
+- `RATE_LIMIT_SALT`
 - `CRON_SECRET`
+
+Optional for CAPTCHA-gated auth:
+
+- `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+- `TURNSTILE_SECRET_KEY`
 
 ## Start Supabase locally
 
@@ -27,6 +33,10 @@ Fill in:
 supabase start
 supabase db reset
 ```
+
+If you are applying migrations manually in a hosted Supabase project, make sure you also run:
+
+- `/Users/tk/dev/project-one/supabase/migrations/20260308190000_abuse_protection.sql`
 
 The included `supabase/config.toml` enables `supabase/seed.sql`, which creates:
 

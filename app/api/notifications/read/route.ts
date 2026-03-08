@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 import { requireCurrentUser } from "@/lib/auth";
 import { hasSupabaseEnv } from "@/lib/env";
-import { parseJson, jsonError } from "@/lib/http";
+import { jsonErrorResponse, parseJson } from "@/lib/http";
+import { enforceMutationGuard } from "@/lib/security/guards";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { notificationReadSchema } from "@/lib/validation";
 
@@ -12,8 +13,25 @@ export async function POST(request: Request) {
   }
 
   try {
-    const currentUser = await requireCurrentUser();
+    const currentUser = await requireCurrentUser({ verified: true });
     const payload = await parseJson(request, notificationReadSchema);
+    await enforceMutationGuard({
+      request,
+      currentUser,
+      actionLabel: "update notifications",
+      userLimit: {
+        scope: "notifications:read:user",
+        maxRequests: 120,
+        windowSeconds: 60,
+        message: "You are updating notifications too quickly. Try again shortly.",
+      },
+      ipLimit: {
+        scope: "notifications:read:ip",
+        maxRequests: 300,
+        windowSeconds: 60,
+        message: "This network is updating notifications too quickly. Try again shortly.",
+      },
+    });
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase
       .from("notifications")
@@ -27,6 +45,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Unable to update notifications.", 400);
+    return jsonErrorResponse(error, "Unable to update notifications.");
   }
 }

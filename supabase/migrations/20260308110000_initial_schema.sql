@@ -1,10 +1,34 @@
 create extension if not exists pgcrypto;
 
-create type public.post_category as enum ('question', 'update', 'alert', 'discussion');
-create type public.user_role as enum ('member', 'moderator', 'admin');
-create type public.report_target_type as enum ('post', 'comment');
-create type public.report_status as enum ('open', 'actioned', 'dismissed');
-create type public.notification_type as enum ('reply_post', 'reply_comment', 'trending_post');
+do $$ begin
+  create type public.post_category as enum ('question', 'update', 'alert', 'discussion');
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.user_role as enum ('member', 'moderator', 'admin');
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.report_target_type as enum ('post', 'comment');
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.report_status as enum ('open', 'actioned', 'dismissed');
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.notification_type as enum ('reply_post', 'reply_comment', 'trending_post');
+exception
+  when duplicate_object then null;
+end $$;
 
 create table if not exists public.communities (
   id uuid primary key default gen_random_uuid(),
@@ -267,8 +291,21 @@ begin
   update public.posts
   set score = coalesce(total_score, 0),
       comment_count = coalesce(total_comments, 0),
-      hot_score = public.calculate_hot_score(coalesce(total_score, 0), coalesce(total_comments, 0), coalesce(post_created_at, timezone('utc', now())))
-  where id = target_post_id;
+      hot_score = public.calculate_hot_score(
+        coalesce(total_score, 0),
+        coalesce(total_comments, 0),
+        coalesce(post_created_at, timezone('utc', now()))
+      )
+  where id = target_post_id
+    and (
+      score is distinct from coalesce(total_score, 0)
+      or comment_count is distinct from coalesce(total_comments, 0)
+      or hot_score is distinct from public.calculate_hot_score(
+        coalesce(total_score, 0),
+        coalesce(total_comments, 0),
+        coalesce(post_created_at, timezone('utc', now()))
+      )
+    );
 end;
 $$;
 
@@ -286,7 +323,8 @@ begin
 
   update public.comments
   set score = coalesce(total_score, 0)
-  where id = target_comment_id;
+  where id = target_comment_id
+    and score is distinct from coalesce(total_score, 0);
 end;
 $$;
 
@@ -374,6 +412,10 @@ declare
   target_post uuid;
   comment_author uuid;
 begin
+  if pg_trigger_depth() > 1 then
+    return null;
+  end if;
+
   target_post := coalesce(new.post_id, old.post_id);
   comment_author := coalesce(new.author_id, old.author_id);
 
@@ -392,6 +434,10 @@ returns trigger
 language plpgsql
 as $$
 begin
+  if pg_trigger_depth() > 1 then
+    return null;
+  end if;
+
   perform public.recalculate_post_totals(coalesce(new.id, old.id));
   perform public.recalculate_user_karma(coalesce(new.author_id, old.author_id));
   return null;
@@ -401,11 +447,13 @@ $$;
 create or replace function public.notify_on_comment_insert()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
 declare
   parent_author uuid;
   post_author uuid;
-  community_id uuid;
+  post_community_id uuid;
   actor_name text;
 begin
   select username
@@ -441,10 +489,10 @@ begin
       where p.id = new.post_id;
     end if;
   else
-    select author_id, community_id
-      into post_author, community_id
-    from public.posts
-    where id = new.post_id;
+    select p.author_id, p.community_id
+      into post_author, post_community_id
+    from public.posts p
+    where p.id = new.post_id;
 
     if post_author is not null and post_author <> new.author_id then
       insert into public.notifications (
@@ -461,7 +509,7 @@ begin
         new.author_id,
         new.post_id,
         new.id,
-        community_id,
+        post_community_id,
         'reply_post',
         coalesce(actor_name, 'A neighbor') || ' replied to your post.'
       );
@@ -651,27 +699,32 @@ alter table public.reports enable row level security;
 alter table public.notifications enable row level security;
 alter table public.moderation_actions enable row level security;
 
+drop policy if exists "communities are publicly readable" on public.communities;
 create policy "communities are publicly readable"
 on public.communities
 for select
 using (true);
 
+drop policy if exists "community neighbors are publicly readable" on public.community_neighbors;
 create policy "community neighbors are publicly readable"
 on public.community_neighbors
 for select
 using (true);
 
+drop policy if exists "profiles are publicly readable" on public.profiles;
 create policy "profiles are publicly readable"
 on public.profiles
 for select
 using (true);
 
+drop policy if exists "users can create own profile" on public.profiles;
 create policy "users can create own profile"
 on public.profiles
 for insert
 to authenticated
 with check (id = auth.uid());
 
+drop policy if exists "users can update own profile" on public.profiles;
 create policy "users can update own profile"
 on public.profiles
 for update
@@ -679,6 +732,7 @@ to authenticated
 using (id = auth.uid())
 with check (id = auth.uid());
 
+drop policy if exists "staff can update profiles" on public.profiles;
 create policy "staff can update profiles"
 on public.profiles
 for update
@@ -686,17 +740,20 @@ to authenticated
 using (public.is_staff())
 with check (true);
 
+drop policy if exists "posts are publicly readable" on public.posts;
 create policy "posts are publicly readable"
 on public.posts
 for select
 using (true);
 
+drop policy if exists "active members can create posts" on public.posts;
 create policy "active members can create posts"
 on public.posts
 for insert
 to authenticated
 with check (author_id = auth.uid() and public.is_active_member());
 
+drop policy if exists "authors can update own posts" on public.posts;
 create policy "authors can update own posts"
 on public.posts
 for update
@@ -704,6 +761,7 @@ to authenticated
 using (author_id = auth.uid())
 with check (author_id = auth.uid());
 
+drop policy if exists "staff can moderate posts" on public.posts;
 create policy "staff can moderate posts"
 on public.posts
 for update
@@ -711,17 +769,20 @@ to authenticated
 using (public.is_staff())
 with check (true);
 
+drop policy if exists "comments are publicly readable" on public.comments;
 create policy "comments are publicly readable"
 on public.comments
 for select
 using (true);
 
+drop policy if exists "active members can create comments" on public.comments;
 create policy "active members can create comments"
 on public.comments
 for insert
 to authenticated
 with check (author_id = auth.uid() and public.is_active_member());
 
+drop policy if exists "authors can update own comments" on public.comments;
 create policy "authors can update own comments"
 on public.comments
 for update
@@ -729,6 +790,7 @@ to authenticated
 using (author_id = auth.uid())
 with check (author_id = auth.uid());
 
+drop policy if exists "staff can moderate comments" on public.comments;
 create policy "staff can moderate comments"
 on public.comments
 for update
@@ -736,12 +798,14 @@ to authenticated
 using (public.is_staff())
 with check (true);
 
+drop policy if exists "users can read own post votes" on public.post_votes;
 create policy "users can read own post votes"
 on public.post_votes
 for select
 to authenticated
 using (user_id = auth.uid());
 
+drop policy if exists "users can manage own post votes" on public.post_votes;
 create policy "users can manage own post votes"
 on public.post_votes
 for all
@@ -749,12 +813,14 @@ to authenticated
 using (user_id = auth.uid())
 with check (user_id = auth.uid());
 
+drop policy if exists "users can read own comment votes" on public.comment_votes;
 create policy "users can read own comment votes"
 on public.comment_votes
 for select
 to authenticated
 using (user_id = auth.uid());
 
+drop policy if exists "users can manage own comment votes" on public.comment_votes;
 create policy "users can manage own comment votes"
 on public.comment_votes
 for all
@@ -762,18 +828,21 @@ to authenticated
 using (user_id = auth.uid())
 with check (user_id = auth.uid());
 
+drop policy if exists "reporters and staff can read reports" on public.reports;
 create policy "reporters and staff can read reports"
 on public.reports
 for select
 to authenticated
 using (reporter_id = auth.uid() or public.is_staff());
 
+drop policy if exists "active members can create reports" on public.reports;
 create policy "active members can create reports"
 on public.reports
 for insert
 to authenticated
 with check (reporter_id = auth.uid() and public.is_active_member());
 
+drop policy if exists "staff can update reports" on public.reports;
 create policy "staff can update reports"
 on public.reports
 for update
@@ -781,12 +850,14 @@ to authenticated
 using (public.is_staff())
 with check (public.is_staff());
 
+drop policy if exists "users can read own notifications" on public.notifications;
 create policy "users can read own notifications"
 on public.notifications
 for select
 to authenticated
 using (user_id = auth.uid());
 
+drop policy if exists "users can update own notifications" on public.notifications;
 create policy "users can update own notifications"
 on public.notifications
 for update
@@ -794,12 +865,14 @@ to authenticated
 using (user_id = auth.uid())
 with check (user_id = auth.uid());
 
+drop policy if exists "staff can read moderation actions" on public.moderation_actions;
 create policy "staff can read moderation actions"
 on public.moderation_actions
 for select
 to authenticated
 using (public.is_staff());
 
+drop policy if exists "staff can insert moderation actions" on public.moderation_actions;
 create policy "staff can insert moderation actions"
 on public.moderation_actions
 for insert
@@ -810,11 +883,13 @@ insert into storage.buckets (id, name, public)
 values ('avatars', 'avatars', true)
 on conflict (id) do nothing;
 
+drop policy if exists "avatar files are publicly readable" on storage.objects;
 create policy "avatar files are publicly readable"
 on storage.objects
 for select
 using (bucket_id = 'avatars');
 
+drop policy if exists "users can upload own avatar files" on storage.objects;
 create policy "users can upload own avatar files"
 on storage.objects
 for insert
@@ -824,6 +899,7 @@ with check (
   and auth.uid()::text = (storage.foldername(name))[1]
 );
 
+drop policy if exists "users can update own avatar files" on storage.objects;
 create policy "users can update own avatar files"
 on storage.objects
 for update
@@ -837,6 +913,7 @@ with check (
   and auth.uid()::text = (storage.foldername(name))[1]
 );
 
+drop policy if exists "users can delete own avatar files" on storage.objects;
 create policy "users can delete own avatar files"
 on storage.objects
 for delete

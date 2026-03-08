@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import type { ReportQueueItem } from "@/lib/types";
 import { formatRelativeTime } from "@/lib/utils";
@@ -20,9 +20,11 @@ const actionLabels = {
 export function ReportQueue({ reports }: ReportQueueProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
 
   const resolveReport = (reportId: string, action: keyof typeof actionLabels) => {
     startTransition(async () => {
+      setMessage(null);
       const response = await fetch(`/api/admin/reports/${reportId}/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -31,12 +33,21 @@ export function ReportQueue({ reports }: ReportQueueProps) {
 
       if (response.ok) {
         router.refresh();
+        return;
       }
+
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      setMessage(payload?.error ?? "Unable to resolve report.");
     });
   };
 
   return (
     <div className="space-y-4">
+      {message ? (
+        <div className="rounded-2xl border border-[var(--highlight)]/30 bg-[var(--highlight-soft)] px-4 py-3 text-sm text-[var(--ink)]">
+          {message}
+        </div>
+      ) : null}
       {reports.map((report) => (
         <article
           key={report.id}

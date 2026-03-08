@@ -50,17 +50,19 @@ export function ProfileSettingsForm({
               avatarPath = data.publicUrl;
             }
 
-            const { error } = await supabase
-              .from("profiles")
-              .update({
+            const response = await fetch("/api/settings", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
                 username,
-                home_community_id: homeCommunityId,
-                avatar_path: avatarPath,
-              })
-              .eq("id", user.id);
+                homeCommunityId,
+                avatarPath,
+              }),
+            });
 
-            if (error) {
-              throw error;
+            if (!response.ok) {
+              const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+              throw new Error(payload?.error ?? "Unable to save settings.");
             }
 
             setMessage("Profile updated.");

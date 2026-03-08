@@ -102,6 +102,7 @@ export interface ProfilePageData {
 export interface CurrentUser {
   id: string;
   email: string;
+  isEmailVerified: boolean;
   username: string;
   avatarUrl: string | null;
   karma: number;

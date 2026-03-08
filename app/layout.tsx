@@ -39,7 +39,7 @@ export default function RootLayout({
   const notificationsPromise = getNotifications();
 
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth">
       <body
         className={`${bodyFont.variable} ${displayFont.variable} ${monoFont.variable} antialiased`}
       >

@@ -17,6 +17,7 @@ export function CommentForm({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [body, setBody] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <form
@@ -28,6 +29,7 @@ export function CommentForm({
           : `/api/posts/${postId}/comments`;
 
         startTransition(async () => {
+          setError(null);
           const response = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -41,7 +43,11 @@ export function CommentForm({
           if (response.ok) {
             setBody("");
             router.refresh();
+            return;
           }
+
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          setError(payload?.error ?? "Unable to post comment.");
         });
       }}
     >
@@ -55,6 +61,7 @@ export function CommentForm({
         placeholder={parentCommentId ? "Write a reply" : "Add context, sources, or updates"}
         className="w-full rounded-[1.5rem] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-7 outline-none transition focus:border-[var(--accent)]"
       />
+      {error ? <p className="text-sm text-[var(--highlight)]">{error}</p> : null}
       <button
         type="submit"
         disabled={pending || !body.trim()}

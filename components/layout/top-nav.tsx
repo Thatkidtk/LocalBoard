@@ -11,76 +11,82 @@ interface TopNavProps {
 }
 
 export function TopNav({ currentUser, notifications }: TopNavProps) {
+  const newPostHref = currentUser?.homeCommunitySlug
+    ? `/submit?community=${currentUser.homeCommunitySlug}`
+    : "/submit";
+
   return (
     <header className="sticky top-0 z-30 border-b border-black/8 bg-[color:var(--wash)]/90 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--ink)] text-white shadow-lg">
-            <MapPinned className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="font-display text-xl tracking-tight text-[var(--ink)]">LocalBoard</p>
-            <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
-              Local updates, faster
-            </p>
-          </div>
-        </Link>
-
-        <nav className="hidden items-center gap-3 md:flex">
-          <Link
-            href="/submit"
-            className="rounded-full bg-[var(--ink)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-          >
-            New post
+      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--ink)] text-white shadow-lg">
+              <MapPinned className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-display text-xl tracking-tight text-[var(--ink)]">LocalBoard</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+                Local updates, faster
+              </p>
+            </div>
           </Link>
-          {currentUser ? (
-            <>
-              <NotificationCenter notifications={notifications} />
-              <Link
-                href={`/u/${currentUser.username}`}
-                className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:border-black/20 hover:bg-[var(--panel-strong)]"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <UserRound className="h-4 w-4" />
-                  {currentUser.username}
-                </span>
-              </Link>
-              <Link
-                href="/settings"
-                className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:border-black/20 hover:bg-[var(--panel-strong)]"
-              >
-                Settings
-              </Link>
-              {currentUser.role !== "member" ? (
+
+          <nav className="flex flex-wrap items-center gap-2 md:justify-end md:gap-3">
+            <Link
+              href={newPostHref}
+              className="rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              New post
+            </Link>
+            {currentUser ? (
+              <>
+                <NotificationCenter notifications={notifications} />
                 <Link
-                  href="/admin"
+                  href={`/u/${currentUser.username}`}
                   className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:border-black/20 hover:bg-[var(--panel-strong)]"
                 >
                   <span className="inline-flex items-center gap-2">
-                    <Shield className="h-4 w-4" />
-                    Admin
+                    <UserRound className="h-4 w-4" />
+                    {currentUser.username}
                   </span>
                 </Link>
-              ) : null}
-              <SignOutButton />
-            </>
-          ) : (
-            <>
-              <Link
-                href="/auth/sign-in"
-                className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:border-black/20 hover:bg-[var(--panel-strong)]"
-              >
-                Sign in
-              </Link>
-              <Link
-                href="/auth/sign-up"
-                className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                Join your board
-              </Link>
-            </>
-          )}
-        </nav>
+                <Link
+                  href="/settings"
+                  className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:border-black/20 hover:bg-[var(--panel-strong)]"
+                >
+                  Settings
+                </Link>
+                {currentUser.role !== "member" ? (
+                  <Link
+                    href="/admin"
+                    className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:border-black/20 hover:bg-[var(--panel-strong)]"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Admin
+                    </span>
+                  </Link>
+                ) : null}
+                <SignOutButton />
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/auth/sign-in"
+                  className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-[var(--ink)] transition hover:border-black/20 hover:bg-[var(--panel-strong)]"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  href="/auth/sign-up"
+                  className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                >
+                  Join your board
+                </Link>
+              </>
+            )}
+          </nav>
+        </div>
       </div>
     </header>
   );

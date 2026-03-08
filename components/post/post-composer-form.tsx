@@ -4,15 +4,20 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { CATEGORY_LABELS, POST_CATEGORIES } from "@/lib/constants";
-import type { PostCategory } from "@/lib/types";
+import type { CommunitySummary, PostCategory } from "@/lib/types";
 
 interface PostComposerFormProps {
-  communityId: string;
+  communities: CommunitySummary[];
+  defaultCommunityId: string;
 }
 
-export function PostComposerForm({ communityId }: PostComposerFormProps) {
+export function PostComposerForm({
+  communities,
+  defaultCommunityId,
+}: PostComposerFormProps) {
   const router = useRouter();
   const [category, setCategory] = useState<PostCategory>("question");
+  const [communityId, setCommunityId] = useState(defaultCommunityId);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -71,6 +76,21 @@ export function PostComposerForm({ communityId }: PostComposerFormProps) {
           </button>
         ))}
       </div>
+
+      <label className="block space-y-2">
+        <span className="text-sm font-medium text-[var(--ink)]">Community</span>
+        <select
+          value={communityId}
+          onChange={(event) => setCommunityId(event.target.value)}
+          className="w-full rounded-2xl border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+        >
+          {communities.map((community) => (
+            <option key={community.id} value={community.id}>
+              {community.city}, {community.stateCode} ({community.zipCode})
+            </option>
+          ))}
+        </select>
+      </label>
 
       <label className="block space-y-2">
         <span className="text-sm font-medium text-[var(--ink)]">Title</span>

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 import { requireModerator } from "@/lib/auth";
 import { hasSupabaseEnv } from "@/lib/env";
-import { parseJson, jsonError } from "@/lib/http";
+import { jsonError, jsonErrorResponse, parseJson } from "@/lib/http";
+import { enforceMutationGuard } from "@/lib/security/guards";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { reportResolutionSchema } from "@/lib/validation";
 
@@ -18,10 +19,27 @@ export async function POST(
     const moderator = await requireModerator();
     const { reportId } = await context.params;
     const payload = await parseJson(request, reportResolutionSchema);
+    await enforceMutationGuard({
+      request,
+      currentUser: moderator,
+      actionLabel: "resolve reports",
+      userLimit: {
+        scope: "admin:reports:resolve:user",
+        maxRequests: 120,
+        windowSeconds: 60 * 60,
+        message: "You are resolving reports too quickly. Try again shortly.",
+      },
+      ipLimit: {
+        scope: "admin:reports:resolve:ip",
+        maxRequests: 240,
+        windowSeconds: 60 * 60,
+        message: "This network is resolving reports too quickly. Try again shortly.",
+      },
+    });
     const supabase = await createSupabaseServerClient();
     const { data: report, error: reportError } = await supabase
       .from("reports")
-      .select("id, target_type, target_id")
+      .select("id, target_type, target_id, status")
       .eq("id", reportId)
       .maybeSingle();
 
@@ -30,6 +48,17 @@ export async function POST(
     }
     if (!report) {
       return jsonError("Report not found.", 404);
+    }
+    if (report.status !== "open") {
+      return jsonError("Report has already been resolved.", 400);
+    }
+
+    if (payload.action === "remove_post" && report.target_type !== "post") {
+      return jsonError("This report targets a comment, not a post.", 400);
+    }
+
+    if (payload.action === "remove_comment" && report.target_type !== "comment") {
+      return jsonError("This report targets a post, not a comment.", 400);
     }
 
     if (payload.action === "remove_post" && report.target_type === "post") {
@@ -73,15 +102,17 @@ export async function POST(
       }
 
       const authorId = target?.author_id;
-      if (authorId) {
-        const { error: suspendError } = await supabase
-          .from("profiles")
-          .update({ is_suspended: true })
-          .eq("id", authorId);
+      if (!authorId) {
+        return jsonError("Target author not found.", 404);
+      }
 
-        if (suspendError) {
-          throw suspendError;
-        }
+      const { error: suspendError } = await supabase
+        .from("profiles")
+        .update({ is_suspended: true })
+        .eq("id", authorId);
+
+      if (suspendError) {
+        throw suspendError;
       }
     }
 
@@ -113,6 +144,6 @@ export async function POST(
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Unable to resolve report.", 400);
+    return jsonErrorResponse(error, "Unable to resolve report.");
   }
 }

@@ -78,7 +78,7 @@ export default async function CommunityPage({
             description="Try a different term, switch to a nearby community, or be the first person to start the conversation."
             action={
               <Link
-                href="/submit"
+                href={`/submit?community=${pageData.community.slug}`}
                 className="inline-flex rounded-full bg-[var(--ink)] px-4 py-2 text-sm font-semibold text-white"
               >
                 Create a post
@@ -102,7 +102,7 @@ export default async function CommunityPage({
             Ask what changed, share verified updates, and help neighbors sort signal from noise.
           </p>
           <Link
-            href={currentUser ? "/submit" : "/auth/sign-up"}
+            href={currentUser ? `/submit?community=${pageData.community.slug}` : "/auth/sign-up"}
             className="mt-5 inline-flex rounded-full bg-white px-4 py-2 text-sm font-semibold text-[var(--ink)]"
           >
             {currentUser ? "Start a post" : "Create account"}

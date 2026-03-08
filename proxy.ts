@@ -25,7 +25,11 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  try {
+    await supabase.auth.getUser();
+  } catch {
+    // Anonymous requests do not always have an auth session.
+  }
   return response;
 }
 

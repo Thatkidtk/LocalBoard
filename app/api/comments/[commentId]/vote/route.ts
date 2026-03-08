@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 import { requireCurrentUser } from "@/lib/auth";
 import { hasSupabaseEnv } from "@/lib/env";
-import { parseJson, jsonError } from "@/lib/http";
+import { jsonError, jsonErrorResponse, parseJson } from "@/lib/http";
+import { enforceMutationGuard } from "@/lib/security/guards";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { voteSchema } from "@/lib/validation";
 
@@ -15,9 +16,26 @@ export async function POST(
   }
 
   try {
-    await requireCurrentUser();
+    const currentUser = await requireCurrentUser({ verified: true });
     const { commentId } = await context.params;
     const payload = await parseJson(request, voteSchema);
+    await enforceMutationGuard({
+      request,
+      currentUser,
+      actionLabel: "vote",
+      userLimit: {
+        scope: "votes:comment:user",
+        maxRequests: 120,
+        windowSeconds: 60,
+        message: "You are voting too quickly. Try again in a moment.",
+      },
+      ipLimit: {
+        scope: "votes:comment:ip",
+        maxRequests: 300,
+        windowSeconds: 60,
+        message: "This network is voting too quickly. Try again in a moment.",
+      },
+    });
     const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase.rpc("toggle_comment_vote", {
       target_comment_id: commentId,
@@ -30,6 +48,6 @@ export async function POST(
 
     return NextResponse.json({ appliedValue: data });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Unable to vote on comment.", 400);
+    return jsonErrorResponse(error, "Unable to vote on comment.");
   }
 }

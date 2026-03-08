@@ -43,6 +43,7 @@ export function ReportButton({
             const formData = new FormData(event.currentTarget);
 
             startTransition(async () => {
+              setMessage(null);
               const response = await fetch("/api/reports", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -54,7 +55,12 @@ export function ReportButton({
                 }),
               });
 
-              setMessage(response.ok ? "Thanks. A moderator will review this." : "Unable to submit report.");
+              const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+              setMessage(
+                response.ok
+                  ? "Thanks. A moderator will review this."
+                  : payload?.error ?? "Unable to submit report.",
+              );
               if (response.ok) {
                 setOpen(false);
               }
