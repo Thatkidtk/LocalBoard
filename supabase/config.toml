@@ -1,0 +1,23 @@
+project_id = "localboard"
+
+[api]
+enabled = true
+port = 54321
+
+[db]
+port = 54322
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = [
+  "http://127.0.0.1:3000/auth/callback",
+  "http://localhost:3000/auth/callback",
+]
+
+[studio]
+enabled = true
+port = 54323
